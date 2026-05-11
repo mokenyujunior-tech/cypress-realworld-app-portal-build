@@ -29,7 +29,7 @@ import { frontendPort, getBackendPort } from "../src/utils/portUtils";
 require("dotenv").config();
 
 const corsOption = {
-  origin: `http://localhost:${frontendPort}`,
+  origin: process.env.FRONTEND_URL || `http://localhost:${frontendPort}`,
   credentials: true,
 };
 
@@ -57,7 +57,7 @@ app.use(bodyParser.json());
 
 app.use(
   session({
-    secret: "session secret",
+    secret: process.env.SESSION_SECRET || "session secret",
     resave: false,
     saveUninitialized: false,
     unset: "destroy",
@@ -118,7 +118,28 @@ app.use("/notifications", notificationRoutes);
 app.use("/bankTransfers", bankTransferRoutes);
 
 app.use(express.static(join(__dirname, "../public")));
+app.use(express.static(join(__dirname, "../build")));
 
 getBackendPort().then((port) => {
   app.listen(port);
+});
+
+const apiPaths = [
+  '/graphql',
+  '/users',
+  '/contacts',
+  '/bankAccounts',
+  '/transactions',
+  '/likes',
+  '/comments',
+  '/notifications',
+  '/bankTransfers',
+  '/testData'
+];
+
+app.get('*', (req, res) => {
+  const isApiRoute = apiPaths.some(p => req.path.startsWith(p));
+  if (!isApiRoute) {
+    res.sendFile(join(__dirname, '../build/index.html'));
+  }
 });
