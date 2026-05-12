@@ -84,7 +84,7 @@ deploy-staging:
   needs: ci
   environment:
     name: staging
-    url: payflow-production-staging-g9h5h8bha3a0e2dx.canadacentral-01.azurewebsites.net
+    url: https://payflow-production-staging-g9h5h8bha3a0e2dx.canadacentral-01.azurewebsites.net
     
   steps:
     - name: Download artifact
@@ -119,7 +119,7 @@ swap-to-production:
   needs: deploy-staging
   environment:
     name: production
-    url: https://payflow-production.azurewebsites.net
+    url: https://payflow-production-bjescndqgahyhuc5.canadacentral-01.azurewebsites.net
     
   steps:
     # Deploy to production slot directly using the production
