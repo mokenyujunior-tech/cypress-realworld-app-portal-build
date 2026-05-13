@@ -125,21 +125,21 @@ getBackendPort().then((port) => {
 });
 
 const apiPaths = [
-  '/graphql',
-  '/users',
-  '/contacts',
-  '/bankAccounts',
-  '/transactions',
-  '/likes',
-  '/comments',
-  '/notifications',
-  '/bankTransfers',
-  '/testData'
+  "/graphql",
+  "/users",
+  "/contacts",
+  "/bankAccounts",
+  "/transactions",
+  "/likes",
+  "/comments",
+  "/notifications",
+  "/bankTransfers",
+  "/testData",
 ];
 
-app.get('*', (req, res) => {
-  const isApiRoute = apiPaths.some(p => req.path.startsWith(p));
+app.get("*", (req, res) => {
+  const isApiRoute = apiPaths.some((p) => req.path.startsWith(p));
   if (!isApiRoute) {
-    res.sendFile(join(__dirname, '../build/index.html'));
+    res.sendFile(join(__dirname, "../build/index.html"));
   }
 });
