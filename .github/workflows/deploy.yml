@@ -64,13 +64,7 @@ jobs:
           VITE_BACKEND_PORT: 3001
           
       - name: Fix prestart script for Azure
-        run: |
-          const fs = require('fs');
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          pkg.scripts.prestart = "node -e \"const fs=require('fs'); fs.copyFileSync('./data/database-seed.json','./data/database.json');\"";
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-          console.log('prestart script updated successfully');
-          console.log('New prestart:', pkg.scripts.prestart);
+        run: node scripts/fix-prestart.js
 
       # Upload the full workspace for deployment jobs.
       # Express backend needs node_modules, backend/, data/, and build/.
