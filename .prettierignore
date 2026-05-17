@@ -6,3 +6,4 @@ build
 coverage
 amplify/*
 aws-exports*
+scripts/fix-prestart.js
