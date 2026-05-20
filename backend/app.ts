@@ -117,13 +117,11 @@ app.use("/comments", commentRoutes);
 app.use("/notifications", notificationRoutes);
 app.use("/bankTransfers", bankTransferRoutes);
 
+// static files
 app.use(express.static(join(__dirname, "../public")));
 app.use(express.static(join(__dirname, "../build")));
 
-getBackendPort().then((port) => {
-  app.listen(port);
-});
-
+// SPA fallback - Must be before app.listen
 const apiPaths = [
   "/graphql",
   "/users",
@@ -142,4 +140,9 @@ app.get("*", (req, res) => {
   if (!isApiRoute) {
     res.sendFile(join(__dirname, "../build/index.html"));
   }
+});
+
+// Start the server (Must be last)
+getBackendPort().then((port) => {
+  app.listen(port);
 });
