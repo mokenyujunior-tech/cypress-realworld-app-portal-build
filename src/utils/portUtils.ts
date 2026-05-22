@@ -23,3 +23,17 @@ export const getBackendPort = async () => {
       console.log(chalk.red(err));
     });
 };
+
+// ---------------------------------------------------------------------------
+// apiBaseUrl — use this for ALL frontend API calls instead of
+// `http://localhost:${backendPort}/...`
+//
+// In production (Azure) the frontend and backend share the same domain,
+// so relative URLs ("/login", "/users", etc.) are correct.
+// In development Vite proxies don't apply to XHR/fetch in XState machines,
+// so we need the full localhost URL.
+// ---------------------------------------------------------------------------
+export const apiBaseUrl: string = 
+    process.env.NODE_ENV === "production"
+      ? ""
+      : `http://localhost:${backendPort}`;
