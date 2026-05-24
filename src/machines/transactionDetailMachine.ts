@@ -9,9 +9,7 @@ export const transactionDetailMachine = dataMachine("transactionData").withConfi
       const payload = omit("type", event);
       const contextTransactionId = !isEmpty(ctx.results) && first(ctx.results)["id"];
       const transactionId = contextTransactionId || payload.transactionId;
-      const resp = await httpClient.get(
-        `${apiBaseUrl}/transactions/${transactionId}`
-      );
+      const resp = await httpClient.get(`${apiBaseUrl}/transactions/${transactionId}`);
       // @ts-ignore
       return { results: [resp.data.transaction] };
     },
@@ -28,10 +26,7 @@ export const transactionDetailMachine = dataMachine("transactionData").withConfi
       const payload = omit("type", event);
       const contextTransactionId = !isEmpty(ctx.results) && first(ctx.results)["id"];
       const transactionId = contextTransactionId || payload.id;
-      const resp = await httpClient.patch(
-        `${apiBaseUrl}/transactions/${transactionId}`,
-        payload
-      );
+      const resp = await httpClient.patch(`${apiBaseUrl}/transactions/${transactionId}`, payload);
       return resp.data;
     },
   },

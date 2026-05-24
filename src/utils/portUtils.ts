@@ -33,7 +33,5 @@ export const getBackendPort = async () => {
 // In development Vite proxies don't apply to XHR/fetch in XState machines,
 // so we need the full localhost URL.
 // ---------------------------------------------------------------------------
-export const apiBaseUrl: string = 
-    process.env.NODE_ENV === "production"
-      ? ""
-      : `http://localhost:${backendPort}`;
+export const apiBaseUrl: string =
+  process.env.NODE_ENV === "production" ? "" : `http://localhost:${backendPort}`;
