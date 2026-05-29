@@ -1,304 +1,340 @@
-<p align="center">
-  <!-- We use two SVGs here so that this displays correctly
-    on Github. This might not look right in other Markdown previewers. -->
-  <img alt="Cypress Real World App Logo" src="./src/svgs/rwa-logo-light.svg#gh-dark-mode-only" />
-  <img alt="Cypress Real World App Logo" src="./src/svgs/rwa-logo.svg#gh-light-mode-only" />
-</p>
+# PayFlow — Full-Stack App Deployment on Azure
 
-<p align="center">
-  <a href="https://cypress.io">
-    <img width="140" alt="Cypress Logo" src="./src/svgs/built-by-cypress.svg" />
-    </a>
-</p>
+Azure App Service · GitHub Actions CI/CD · Azure Key Vault · Deployment Slots · Zero-Downtime Deployment
 
-<p align="center">
-   <a href="https://cloud.cypress.io/projects/7s5okt/runs">
-    <img src="https://img.shields.io/endpoint?url=https://cloud.cypress.io/badge/detailed/7s5okt/develop&style=flat&logo=cypress" />
-  </a>
-
-  <a href="https://codecov.io/gh/cypress-io/cypress-realworld-app">
-    <img src="https://codecov.io/gh/cypress-io/cypress-realworld-app/branch/develop/graph/badge.svg" />
-  </a>
-
-  <a href="https://percy.io/cypress-io/cypress-realworld-app">
-    <img src="https://percy.io/static/images/percy-badge.svg" />
-  </a>
-
-   <a href="#contributors-">
-    <img src="https://img.shields.io/badge/all_contributors-6-green.svg?style=flat" />
-  </a>
-</p>
-
-<p align="center">
-A payment application to demonstrate <strong>real-world</strong> usage of <a href="https://cypress.io">Cypress</a> testing methods, patterns, and workflows.
-</p>
-
-<p align="center">
-  <img style='width: 70%' alt="Cypress Real World App" src="./public/img/rwa-readme-screenshot.png" />
-</p>
-
-> 💬 **Note from maintainers**
->
-> This application is purely for demonstration and educational purposes. Its setup and configuration resemble typical real-world applications, but it's not a full-fledged production system. Use this app to learn, experiment, tinker, and practice application testing with Cypress.
->
-> Happy Testing!
+*A production-grade Node.js + React application deployed to Azure with a three-stage automated pipeline, secrets management, and zero-downtime slot swaps.*
 
 ---
 
-## Features
+## 1. Architecture
 
-🛠 Built with [React][reactjs], [XState][xstate], [Express][express], [lowdb][lowdb], [Material-UI][material-ui] and [TypeScript][typescript]
-⚡️ Zero database dependencies
-🚀 Full-stack [Express][express]/[React][reactjs] application with real-world features and tests
-👮‍♂️ Local Authentication
-🔥 Database Seeding with End-to-end Tests
-💻 CI/CD + [Cypress Cloud][cypresscloud]
-
-## Getting Started
-
-The Cypress Real-World App (RWA) is a full-stack Express/React application backed by a local JSON database ([lowdb]).
-
-The app is bundled with [example data](./data/database.json) (`data/database.json`) that contains everything you need to start using the app and run tests out-of-the-box.
-
-> 🚩 **Note**
->
-> You can login to the app with any of the [example app users](./data/database.json#L2). The default password for all users is `s3cret`.
-> Example users can be seen by running `yarn list:dev:users`.
-
-### Prerequisites
-
-This project requires [Node.js](https://nodejs.org/en/) to be installed on your machine. Refer to the [.node-version](./.node-version) file for the exact version.
-
-[Yarn Classic](https://classic.yarnpkg.com/) is also required. Once you have [Node.js](https://nodejs.org/en/) installed, execute the following to install the npm module [yarn](https://www.npmjs.com/package/yarn) (Classic - version 1) globally.
-
-```shell
-npm install yarn@latest -g
+```
+                        ┌─────────────────────────────────────────┐
+                        │             GitHub Repository            │
+                        │           (develop branch push)          │
+                        └──────────────────┬──────────────────────┘
+                                           │
+                        ┌──────────────────▼──────────────────────┐
+                        │         GitHub Actions Pipeline          │
+                        │                                          │
+                        │  Job 1: CI Quality Checks                │
+                        │  ├── Type check · Lint · Unit Tests      │
+                        │  ├── yarn build (Vite frontend)          │
+                        │  ├── fix-prestart.js (Azure fix)         │
+                        │  └── Upload artifact: payflow-build      │
+                        │                                          │
+                        │  Job 2: Deploy to Staging Slot           │
+                        │  └── Download → Deploy (auto)            │
+                        │                                          │
+                        │  Job 3: Swap to Production               │
+                        │  └── Manual Approval Gate → Deploy       │
+                        └──────┬───────────────────┬──────────────┘
+                               │                   │
+               ┌───────────────▼───┐         ┌─────▼─────────────────┐
+               │  Staging Slot     │         │  Production Slot       │
+               │  App Service B1   │  swap   │  App Service B1        │
+               │  (auto deploy)    │ ──────► │  (manual approval)     │
+               └───────────────────┘         └────────────────────────┘
+                        │                               │
+               ┌────────▼────────┐           ┌──────────▼────────────┐
+               │  Key Vault      │           │  Key Vault             │
+               │  (Staging)      │           │  (Production)          │
+               │  SESSION_SECRET │           │  SESSION_SECRET        │
+               │  PAGE_SIZE      │           │  PAGE_SIZE             │
+               └─────────────────┘           └───────────────────────┘
 ```
 
-If you have Node.js' experimental [Corepack](https://nodejs.org/dist/latest/docs/api/corepack.html) feature enabled, then you should skip the step `npm install yarn@latest -g` to install Yarn Classic globally. The RWA project is locally configured for `Corepack` to use Yarn Classic (version 1).
+---
 
-#### Yarn Modern
+## 2. Tools Used
 
-**This project is not compatible with [Yarn Modern](https://yarnpkg.com/) (version 2 and later).**
+### Azure Services
 
-### Installation
+- **Resource Group (rg-payflow):** Single resource group containing all PayFlow resources. Scoped this way so everything can be tracked, billed, and destroyed together.
 
-To clone the repo to your local system and install dependencies, execute the following commands:
+- **Azure App Service Plan (Basic B1):** The compute tier running the application. B1 was chosen over Free (F1) specifically because deployment slots are not available on Free tier. B1 supports custom deployment slots — the foundation of the zero-downtime strategy.
 
-```shell
-git clone https://github.com/cypress-io/cypress-realworld-app
-cd cypress-realworld-app
-yarn
+- **Azure App Service — payflow-production:** The main App Service hosting both frontend and backend. The Express backend serves the React build as static files through the SPA fallback, meaning one App Service handles everything — no separate static hosting needed.
+
+- **Deployment Slot — staging:** A mirror environment running inside the same App Service. Staging deploys automatically on every push. Production only receives code after manual approval. The slot swap is zero-downtime — Azure warms up the new version before routing any traffic.
+
+- **Azure Key Vault (x2 — staging and production):** Stores `SESSION_SECRET` and `PAGINATION_PAGE_SIZE` as secrets. Neither value ever appears in code, environment files, or the GitHub repository. The App Service reads them at runtime via Key Vault references (`@Microsoft.KeyVault(SecretUri=...)`).
+
+- **Managed Identity:** Grants each App Service slot its own identity in Microsoft Entra ID. This identity is assigned the Key Vault Secrets User role, which is what allows the App Service to read secrets without storing any credentials anywhere.
+
+### CI/CD
+
+- **GitHub Actions:** Three-job pipeline triggered on every push to the `develop` branch. One build artifact is created in Job 1 and reused by both Job 2 and Job 3 — staging and production always run the exact same compiled binary.
+
+- **GitHub Environments (staging + production):** Each environment holds its own `AZURE_WEBAPP_PUBLISH_PROFILE` secret — the XML credential file downloaded from Azure that authenticates GitHub Actions to deploy to that specific slot.
+
+### Application
+
+- **PayFlow (cypress-realworld-app):** A full-stack financial transactions app. React frontend compiled with Vite. Express backend running on Node.js via ts-node. LowDB JSON file as the database. The app was originally built for local development only — deploying it to Azure required solving several infrastructure and code problems that the original developers never anticipated.
+
+---
+
+## 3. The Problem This Project Solves
+
+### Why This Project Exists
+
+Most tutorials show you how to deploy a simple app where everything works the first time. This project was different from the start.
+
+PayFlow was a real-world application handed over by a mentor with one instruction: deploy it to Azure. No deployment configuration existed. No production environment had ever been considered. The app had hardcoded `localhost` URLs in 36 places across 11 files, a startup sequence that depended on tools that break in Azure's runtime environment, and no secrets management of any kind.
+
+The goal was to take a developer's local-only application and transform it into a professionally deployed, production-grade cloud application — with a real CI/CD pipeline, proper secrets management, zero-downtime deployments, and environment separation between staging and production.
+
+### What This Deployment Delivers
+
+- **Zero-downtime deployments** — staging warms up before production ever receives traffic. The old production code stays in the staging slot and can be swapped back instantly if something is wrong.
+
+- **Secrets never in code** — `SESSION_SECRET` and `PAGINATION_PAGE_SIZE` live exclusively in Azure Key Vault. The application reads them through Managed Identity at runtime without any credentials stored anywhere.
+
+- **Human approval before production** — the pipeline pauses after staging and waits for a reviewer to approve before anything touches production. Automation handles the work. A human makes the final call.
+
+- **One build, two deployments** — the frontend is compiled exactly once in Job 1. The same artifact deploys to staging and then to production. Staging and production are guaranteed to run identical code.
+
+- **Environment separation** — staging and production each have their own Key Vault, their own secrets, their own publish profile. No configuration crosses the boundary accidentally.
+
+---
+
+## 4. Prerequisites
+
+Before starting, you need:
+
+- **An active Azure subscription** with permission to create Resource Groups, App Service Plans, App Services, Key Vaults, and Managed Identities
+
+- **A GitHub account** with a fork of the PayFlow repository and permission to create Environments and Secrets under Settings
+
+- **Azure CLI installed** — used to verify resources and diagnose issues during deployment
+
+- **Node.js and Yarn installed locally** — to run `yarn dev` and verify the app works before deploying
+
+- **Git Bash (on Windows)** — required to run the bash fix scripts locally
+
+---
+
+## 5. Deployment Steps
+
+### Step 1 — Create Azure Resources
+
+In the Azure Portal, create the following inside a single Resource Group (`rg-payflow`):
+
+1. **App Service Plan** — Basic B1, Linux, Canada Central
+2. **App Service** — name: `payflow-production`, publish: Code, runtime: Node 18 LTS
+3. **Deployment Slot** — name: `staging` (created under the App Service → Deployment slots)
+4. **Key Vault (staging)** — name: `kv-payflow-staging`
+5. **Key Vault (production)** — name: `kv-payflow-prod`
+
+### Step 2 — Enable Managed Identity
+
+For both the production App Service and the staging slot:
+
+1. Go to **Identity** → System assigned → toggle **On** → Save
+2. Copy the Object ID that appears
+
+### Step 3 — Add Secrets to Key Vault
+
+In each Key Vault → **Objects → Secrets → + Generate/Import**:
+
+| Name | Value |
+|---|---|
+| `SESSION-SECRET` | A strong random string (minimum 32 characters) |
+| `PAGINATION-PAGE-SIZE` | `10` |
+
+### Step 4 — Grant Key Vault Access
+
+In each Key Vault → **Access control (IAM) → + Add role assignment**:
+
+- Role: **Key Vault Secrets User**
+- Assign access to: **Managed Identity**
+- Select the App Service or staging slot's Managed Identity
+
+### Step 5 — Configure Environment Variables in App Service
+
+For the **production** App Service and **staging** slot, add these under **Environment Variables**:
+
+| Name | Value | Slot Setting |
+|---|---|---|
+| `NODE_ENV` | `production` | No |
+| `PORT` | `8080` | No |
+| `FRONTEND_URL` | Your Azure App Service URL | ✓ Yes |
+| `VITE_BACKEND_PORT` | `3001` | No |
+| `SESSION_SECRET` | `@Microsoft.KeyVault(SecretUri=https://your-kv.vault.azure.net/secrets/SESSION-SECRET/)` | ✓ Yes |
+| `PAGINATION_PAGE_SIZE` | `@Microsoft.KeyVault(SecretUri=https://your-kv.vault.azure.net/secrets/PAGINATION-PAGE-SIZE/)` | No |
+
+Verify both Key Vault references show a green **✓ Key vault** badge with **Resolved** status before continuing. **Configured** and **Resolved** are not the same thing — Configured means the reference is saved, Resolved means Azure can actually read the secret.
+
+### Step 6 — Fix the Startup Script
+
+The app uses `ncp` and `ts-node` in its startup sequence. Both break on Azure due to Oryx compression — `node_modules` is packed into a `tar.gz` at deployment time and symlinks break on extraction. Create `scripts/fix-prestart.js` in the root of the repository:
+
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+const pkgPath = path.join(__dirname, '..', 'package.json');
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
+// Replace ncp with native fs.copyFileSync
+pkg.scripts.prestart = pkg.scripts.prestart
+  .replace(
+    /ncp scripts\/mock-aws-exports\.js src\/aws-exports\.js && ncp scripts\/mock-aws-exports-es5\.js aws-exports-es5\.js/,
+    'node -e "const fs=require(\'fs\'); fs.copyFileSync(\'./data/database-seed.json\',\'./data/database.json\');"'
+  );
+
+// Replace broken ts-node symlink with direct path
+pkg.scripts.start = pkg.scripts.start
+  .replace('cross-env NODE_ENV=development concurrently yarn:start:react yarn:start:api', '')
+  .replace('nyc --silent ts-node -P tsconfig.tsnode.json -r tsconfig-paths/register backend/app.ts',
+    'node node_modules/ts-node/dist/bin.js -P tsconfig.tsnode.json backend/app.ts');
+
+fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+console.log('prestart fixed for Azure');
 ```
 
-#### Mac users with M-series chips will need to prepend `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true`.
+### Step 7 — Fix Hardcoded localhost URLs
 
-```shell
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true yarn install
+The frontend calls `http://localhost:${backendPort}` in 36 places across 9 machine files. Run the fix script:
+
+```bash
+bash fix-backend-urls.sh
 ```
 
-### Run the app
+This adds `apiBaseUrl` to `src/utils/portUtils.ts`:
 
-```shell
-yarn dev
+```typescript
+export const apiBaseUrl: string =
+  process.env.NODE_ENV === "production"
+    ? ""
+    : `http://localhost:${backendPort}`;
 ```
 
-> 🚩 **Note**
->
-> The app will run on port `3000` (frontend) and `3001` (API backend) by default. Please make sure there are no other applications or services running on both ports.
-> If you want to change the default ports, you can do so by modifying `PORT` and `VITE_BACKEND_PORT` variables in `.env` file.
-> However, make sure the modified port numbers in `.env` are not committed into Git since the CI environments still expect the application to run on the default ports.
+And replaces every `` `http://localhost:${backendPort}/... `` with `` `${apiBaseUrl}/... `` across all machine files.
 
-### Start Cypress
+### Step 8 — Fix CORS
 
-```shell
-yarn cypress:open
+In `backend/app.ts`, update the CORS configuration:
+
+```typescript
+const corsOption = {
+  origin: process.env.FRONTEND_URL || `http://localhost:${frontendPort}`,
+  credentials: true,
+};
 ```
 
-> 🚩 **Note**
->
-> If you have changed the default ports, then you need to update Cypress configuration file (`cypress.config.ts`) locally.
-> There are three properties that you need to update in `cypress.config.ts`: `e2e.baseUrl`, `env.apiUrl`, and `env.url`.
-> The port number in `e2e.baseUrl` corresponds to `PORT` variable in `.env` file. Similarly, the port number in `env.apiUrl` and `env.url` correspond to `VITE_BACKEND_PORT`.
-> For example, if you have changed `PORT` to `13000` and `VITE_BACKEND_PORT` to `13001` in `.env` file, then your `cypress.config.ts` should look similar to the following snippet:
->
-> ```js
-> {
->   env: {
->     apiUrl: "http://localhost:13001",
->     codeCoverage: {
->       url: "http://localhost:13001/__coverage__"
->     },
->   },
->   e2e: {
->     baseUrl: "http://localhost:13000"
->   }
-> }
-> ```
->
-> Avoid committing the modified `cypress.config.ts` into Git since the CI environments still expect the application to be run on default ports.
+### Step 9 — Add SPA Fallback
 
-## Tests
+In `backend/app.ts`, add the SPA fallback before the `getBackendPort().then` block:
 
-| Type      | Location                                 |
-| --------- | ---------------------------------------- |
-| api       | [cypress/tests/api](./cypress/tests/api) |
-| ui        | [cypress/tests/ui](./cypress/tests/ui)   |
-| component | [src/(next to component)](./src)         |
-| unit      | [`src/__tests__`](./src/__tests__)       |
+```typescript
+const apiPaths = ['/graphql','/users','/contacts','/bankAccounts',
+  '/transactions','/likes','/comments','/notifications',
+  '/bankTransfers','/testData'];
 
-## Database
+app.get('*', (req, res) => {
+  const isApiRoute = apiPaths.some(p => req.path.startsWith(p));
+  if (!isApiRoute) {
+    res.sendFile(join(__dirname, '../build/index.html'));
+  }
+});
+```
 
-- The local JSON database is located in [data/database.json](./data/database.json) and is managed with [lowdb].
+Without this, refreshing any page on Azure returns a 404. The SPA fallback catches all non-API routes and returns `index.html`, letting React Router render the correct page.
 
-- The database is [reseeded](./data/database-seed.json) each time the application is started (via `yarn dev`). Database seeding is done in between each [Cypress End-to-End test](./cypress/tests).
+### Step 10 — Configure GitHub Environments
 
-- Updates via the React frontend are sent to the [Express][express] server and handled by a set of [database utilities](backend/database.ts)
+In your GitHub repository → **Settings → Environments**:
 
-- Generate a new database using `yarn db:seed`.
+**Staging environment:**
+- Name: `staging`
+- No protection rules
+- Secret: `AZURE_WEBAPP_PUBLISH_PROFILE` → paste contents of staging slot publish profile XML
 
-- An [empty database seed](./data/empty-seed.json) is provided along with a script (`yarn start:empty`) to view the application without data.
+**Production environment:**
+- Name: `production`
+- Protection rules: **Required reviewers** → add your GitHub username
+- Secret: `AZURE_WEBAPP_PUBLISH_PROFILE` → paste contents of production publish profile XML
 
-## Additional NPM Scripts
+Download publish profiles from: Azure Portal → App Service → Deployment slots → select slot → **Get publish profile**
 
-| Script         | Description                                                                                                                                                                       |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| dev            | Starts backend in watch mode and frontend                                                                                                                                         |
-| dev:coverage   | Starts backend in watch mode and frontend with instrumented code coverage enabled                                                                                                 |
-| dev:auth0      | Starts backend in watch mode and frontend; [Uses Auth0 for Authentication](#auth0) > [Read Guide](http://on.cypress.io/auth0)                                                     |
-| dev:okta       | Starts backend in watch mode and frontend; [Uses Okta for Authentication](#okta) > [Read Guide](http://on.cypress.io/okta)                                                        |
-| dev:cognito    | Starts backend in watch mode and frontend; [Uses Cognito for Authentication](#amazon-cognito) > [Read Guide](http://on.cypress.io/amazon-cognito)                                 |
-| dev:google     | Starts backend in watch mode and frontend; [Uses Google for Authentication](#google) > [Read Guide](https://docs.cypress.io/guides/testing-strategies/google-authentication.html) |
-| start          | Starts backend and frontend                                                                                                                                                       |
-| types          | Validates types                                                                                                                                                                   |
-| db:seed        | Generates fresh database seeds for json files in /data                                                                                                                            |
-| start:empty    | Starts backend, frontend and Cypress with empty database seed                                                                                                                     |
-| tsnode         | Customized ts-node command to get around react-scripts restrictions                                                                                                               |
-| list:dev:users | Provides id and username for users in the dev database                                                                                                                            |
+### Step 11 — Add the Pipeline
 
-For a complete list of scripts see [package.json](./package.json)
+Create `.github/workflows/deploy.yml` in your repository with the three-job pipeline. Push to the `develop` branch to trigger the first deployment.
 
-## Code Coverage Report
+---
 
-The Cypress Real-World App uses the [@cypress/code-coverage](https://github.com/cypress-io/code-coverage) plugin to generate code coverage reports for the app frontend and backend.
+## 6. Problems Faced and Solutions
 
-To generate a code coverage report:
+**`ncp: not found` on first deployment**
+The `prestart` script called `ncp` which lives in `node_modules`. Azure's Oryx build system compresses `node_modules` into a `tar.gz` for faster cold starts. When the app started, the archive hadn't been extracted yet — `ncp` was unreachable.
+**Solution:** Replaced `ncp` with native Node.js `fs.copyFileSync` via `fix-prestart.js`, which runs at build time inside GitHub Actions before the artifact is uploaded.
 
-1. Start the development server with coverage enabled by running `yarn dev:coverage`.
-2. Run `yarn cypress:run --env coverage=true` and wait for the test run to complete.
-3. Once the test run is complete, you can view the report at `coverage/index.html`.
+---
 
-## 3rd Party Authentication Providers
+**`ts-node: not found` — broken symlink**
+After fixing `ncp`, the backend tried to start using `node_modules/.bin/ts-node`. This is a symlink. When GitHub Actions zips the artifact and Azure extracts it, symlinks break — the pointer exists but points to nothing.
+**Solution:** Called `node node_modules/ts-node/dist/bin.js` directly, bypassing the symlink entirely.
 
-Support for 3rd party authentication is available in the application to demonstrate the concepts on logging in with a 3rd party provider.
+---
 
-The app contains different entry points for each provider. There is a separate **index** file for each provider, and to use one, you must replace the current **index.tsx** file with the desired one. The following providers are supported:
+**`Still waiting...` infinite loop**
+An early version of `startup.sh` had a `while` loop checking for `ts-node` to appear in `node_modules/.bin`. Since the symlink was always broken, the loop ran forever and the container locked up permanently.
+**Solution:** Cleared the startup command in Azure Portal to break the deadlock.
 
-- [Auth0](#auth0) (index.auth0.tsx)
-- [Okta](#okta) (index.okta.tsx)
-- [Amazon Cognito](#amazon-cognito) (index.cognito.tsx)
-- [Google](#google) (index.google.tsx)
+---
 
-### Auth0
+**`cross-env: not found` and `nyc: not found`**
+After bypassing the ts-node symlink, the start command still contained `cross-env` and `nyc` — both live in `node_modules` and both failed for the same reason as `ncp`.
+**Solution:** Stripped both from the start command in `fix-prestart.js`.
 
-The [Auth0](https://auth0.com/) tests have been rewritten to take advantage of our [`cy.session`](https://docs.cypress.io/api/commands/session) and [`cy.origin`](https://docs.cypress.io/api/commands/origin) commands.
+---
 
-Prerequisites include an Auth0 account and a Tenant configured for use with a SPA. Environment variables from Auth0 are to be placed in the [.env](./.env). For more details see [Auth0 Application Setup](http://on.cypress.io/auth0#Auth0-Application-Setup) and [Setting Auth0 app credentials in Cypress](http://on.cypress.io/auth0#Setting-Auth0-app-credentials-in-Cypress).
+**`Cannot find module 'tsconfig-paths/register'`**
+The `-r tsconfig-paths/register` flag passed to ts-node tried to preload `tsconfig-paths` — another broken symlink.
+**Solution:** Removed the flag. The backend doesn't use TypeScript path aliases so there was no functional impact.
 
-To start the application with Auth0, replace the current **src/index.tsx** file with the **src/index.auth0.tsx** file and start the application with `yarn dev:auth0` and run Cypress with `yarn cypress:open`.
+---
 
-The only passing spec on this branch will be the [auth0 spec](./cypress/tests/ui-auth-providers/auth0.spec.ts); all others will fail. Please note that your test user will need to authorize your Auth0 app before the tests will pass.
+**`import.meta.env.PROD` crashing the backend**
+The URL fix script added `import.meta.env.PROD` to detect production in `portUtils.ts`. Vite understands `import.meta` — Node.js does not. The backend crashed immediately on startup.
+**Solution:** Replaced with `process.env.NODE_ENV === "production"` which both runtimes understand.
 
-### Okta
+---
 
-A [guide has been written with detail around adapting the RWA](http://on.cypress.io/okta) to use [Okta][okta] and to explain the programmatic command used for Cypress tests.
+**`ERR_CONNECTION_REFUSED` — localhost hardcoded in 36 places**
+Even after the backend started, every API call from the frontend failed. All 9 machine files called `http://localhost:${backendPort}/endpoint`. On Azure there is no localhost.
+**Solution:** Added `apiBaseUrl` to `portUtils.ts` and ran `fix-backend-urls.sh` to replace all 36 instances automatically.
 
-Prerequisites include an [Okta][okta] account and [application configured for use with a SPA][oktacreateapp]. Environment variables from [Okta][okta] are to be placed in the [.env](./.env).
+---
 
-To start the application with Okta, replace the current **src/index.tsx** file with the **src/index.okta.tsx** file and start the application with `yarn dev:okta` and run Cypress with `yarn cypress:open`.
+**Key Vault references showing `Configured` but not `Resolved`**
+The App Service showed the Key Vault references as saved but the app couldn't read the secrets.
+**Solution:** The Managed Identity hadn't been granted the Key Vault Secrets User role yet. Assigning the role and waiting a few minutes for Azure to propagate it changed the status to Resolved.
 
-The **only passing spec on this branch** will be the [okta spec](./cypress/tests/ui-auth-providers/okta.spec.ts); all others will fail.
+---
 
-### Amazon Cognito
+## 7. Lessons Learned and Future Improvements
 
-A [guide has been written with detail around adapting the RWA](http://on.cypress.io/amazon-cognito) to use [Amazon Cognito][cognito] as the authentication solution and to explain the programmatic command used for Cypress tests.
+### Lessons Learned
 
-Prerequisites include an [Amazon Cognito][cognito] account. Environment variables from [Amazon Cognito][cognito] are provided by the [AWS Amplify CLI][awsamplify].
+- **`Configured` and `Resolved` are not the same thing in Azure Key Vault references.** Configured means the reference syntax is saved. Resolved means the App Service Managed Identity has permission to actually read the secret. Both must be true.
 
-- A user pool is required (identity pool is not used here)
-  - The user pool must have a hosted UI domain configured, which must:
-    - allow callback and sign-out URLs of `http://localhost:3000/`,
-    - allow implicit grant Oauth grant type,
-    - allow these OpenID Connect scopes:
-      - aws.cognito.signin.user.admin
-      - email
-      - openid
-  - The user pool must have an app client configured, with:
-    - enabled auth flow `ALLOW_USER_PASSWORD_AUTH`, only for programmatic login flavor of test.
-    - The `cy.origin()` flavor of test only requires auth flow `ALLOW_USER_SRP_AUTH`, and does not require `ALLOW_USER_PASSWORD_AUTH`.
-  - The user pool must have a user corresponding to the `AWS_COGNITO` env vars mentioned below, and the user's Confirmation Status must be `Confirmed`. If it is `Force Reset Password`, then use a browser to log in once at `http://localhost:3000` while `yarn dev:cognito` is running to reset their password.
+- **Vite bakes environment variables into the bundle at build time, not runtime.** Setting `VITE_BACKEND_PORT` in the Azure Portal after deployment does nothing. It must be set in the GitHub Actions build step before `yarn build` runs.
 
-The test knobs are in a few places:
+- **One build, two deployments.** Building the app twice — once for staging, once for production — is how subtle environment differences sneak into production undetected. The artifact should be built once and deployed everywhere.
 
-- The `.env` file has `VITE_AUTH_TOKEN_NAME` and vars beginning `AWS_COGNITO`. Be careful not to commit any secrets.
-- Both `scripts/mock-aws-exports.js` and `scripts/mock-aws-exports-es5.js` must have the same data; only their export statements differ. These files can be edited manually or exported from the amplify CLI.
-- `cypress.config.ts` has `cognito_programmatic_login` to control flavor of the test.
+- **Azure's Oryx compression breaks symlinks.** Tools called through `node_modules/.bin/` use symlinks that survive in local environments but break when the artifact is zipped and extracted on Azure. Always reference the actual JavaScript file directly.
 
-To start the application with Cognito, replace the current **src/index.tsx** file with the **src/index.cognito.tsx** file and start the application with `yarn dev:cognito` and run Cypress with `yarn cypress:open`. `yarn dev` may need to have been run once first.
+- **The manual approval gate is not just a safety feature.** It is the moment a human takes responsibility for what is about to touch production. Clicking approve without thinking defeats its entire purpose.
 
-The **only passing spec on this branch** will be the [cognito spec](./cypress/tests/ui-auth-providers/cognito.spec.ts); all others will fail.
+### Future Improvements
 
-### Google
+- **Terraform** — provision all Azure resources (App Service, Key Vault, Managed Identity, RBAC assignments) as infrastructure as code so the entire environment can be recreated in minutes
+- **Replace LowDB with Azure SQL or Cosmos DB** — the JSON file database works for demos but cannot scale, persist properly, or survive slot swaps with data integrity
+- **Azure Monitor alerts** — set up alerts on HTTP 5xx error rates and response times so production issues are caught before users report them
+- **Separate frontend and backend** — serve the React build from Azure Static Web Apps and keep only the API on App Service, which would reduce cost and improve frontend performance globally
 
-A [guide has been written with detail around adapting the RWA](https://docs.cypress.io/guides/testing-strategies/google-authentication.html) to use [Google][google] as the authentication solution and to explain the programmatic command used for Cypress tests.
+---
 
-Prerequisites include an [Google][google] account. Environment variables from [Google][google] are to be placed in the [.env](./.env).
-
-To start the application with Google, replace the current **src/index.tsx** file with the **src/index.google.tsx** file and start the application with `yarn dev:google` and run Cypress with `yarn cypress:open`.
-
-The **only passing spec** when run with `yarn dev:google` will be the [google spec](./cypress/tests/ui-auth-providers/google.spec.ts); all others will fail.
-
-## License
-
-[![license](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/cypress-io/cypress/blob/master/LICENSE)
-
-This project is licensed under the terms of the [MIT license](/LICENSE).
-
-[reactjs]: https://reactjs.org
-[xstate]: https://xstate.js.org
-[express]: https://expressjs.com
-[lowdb]: https://github.com/typicode/lowdb
-[typescript]: https://typescriptlang.org
-[cypresscloud]: https://cloud.cypress.io/projects/7s5okt/runs
-[material-ui]: https://material-ui.com
-[okta]: https://okta.com
-[auth0]: https://auth0.com
-[oktacreateapp]: https://developer.okta.com/docs/guides/sign-into-spa/react/create-okta-application/
-[cognito]: https://aws.amazon.com/cognito
-[awsamplify]: https://amplify.aws
-[google]: https://google.com
-
-## Contributors ✨
-
-Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
-
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tr>
-    <td align="center"><a href="http://www.kevinold.com"><img src="https://avatars0.githubusercontent.com/u/21967?v=4" width="100px;" alt=""/><br /><sub><b>Kevin Old</b></sub></a></td>
-    <td align="center"><a href="https://twitter.com/amirrustam"><img src="https://avatars0.githubusercontent.com/u/334337?v=4" width="100px;" alt=""/><br /><sub><b>Amir Rustamzadeh</b></sub></a></td>
-    <td align="center"><a href="https://twitter.com/be_mann"><img src="https://avatars2.githubusercontent.com/u/1268976?v=4" width="100px;" alt=""/><br /><sub><b>Brian Mann</b></sub></a></td>
-    <td align="center"><a href="https://glebbahmutov.com/"><img src="https://avatars1.githubusercontent.com/u/2212006?v=4" width="100px;" alt=""/><br /><sub><b>Gleb Bahmutov</b></sub></a></td>
-    <td align="center"><a href="http://www.bencodezen.io"><img src="https://avatars0.githubusercontent.com/u/4836334?v=4" width="100px;" alt=""/><br /><sub><b>Ben Hong</b></sub></a></td>
-    <td align="center"><a href="https://github.com/davidkpiano"><img src="https://avatars2.githubusercontent.com/u/1093738?v=4" width="100px;" alt=""/><br /><sub><b>David Khourshid</b></sub></a></td>
-  </tr>
-</table>
-
-<!-- markdownlint-enable -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!!
+*Built by MK (Mokenyu) · George Brown College · Cloud Computing & Systems Administration*
