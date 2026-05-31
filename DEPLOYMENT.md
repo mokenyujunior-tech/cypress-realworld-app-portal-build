@@ -36,7 +36,7 @@ One resource group holds everything. No separate resource groups needed.
 
 The session secret in `backend/app.ts` is hardcoded as the string `session secret` and must be replaced with a Key Vault reference.
 
-![Screenshot 2026-05-30 233819](Images/Screenshot%202026-05-30%20233819.png)
+![Session secret](Images/Session%20secret.png)
 
 ---
 
