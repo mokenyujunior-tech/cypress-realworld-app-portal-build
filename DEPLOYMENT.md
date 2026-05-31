@@ -26,7 +26,7 @@ One resource group holds everything. No separate resource groups needed.
 
 **Step 2:** Granted myself the Key Vault Officer Role
 
-![Screenshot 2026-05-10 010328](Images/Screenshot%2026-05-10%010328.png)
+![Screenshot 2026-05-10 010328](Images/Screenshot%202026-05-10%20010328.png)
 
 **Step 3:** Added three secrets in the Key Vault.
 
