@@ -36,7 +36,7 @@ One resource group holds everything. No separate resource groups needed.
 
 The session secret in `backend/app.ts` is hardcoded as the string `session secret` and must be replaced with a Key Vault reference.
 
-![Session Secret Hardcoded in backend/app.ts](Images/Screenshot%202026-05-30%20233819.png)
+![Screenshot 2026-05-30 233819](Images/Screenshot%202026-05-30%20233819.png)
 
 ---
 
@@ -62,9 +62,9 @@ yarn start
 
 The README lists `start` as the script that starts the backend and frontend together. The `prestart` script runs automatically before it, copying `database-seed.json` to `database.json` to seed the database. One command handles both seeding and starting.
 
-![Start Script in README](Images/start.png)
+![start](Images/start.png)
 
-![Prestart Script in package.json](Images/prestart.png)
+![prestart](Images/prestart.png)
 
 **Step 6:** Added three environment variables under Settings → Environment variables → App settings:
 
