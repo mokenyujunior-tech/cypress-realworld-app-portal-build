@@ -1,6 +1,11 @@
 # Deployment Steps
 
 All steps below were performed through the Azure Portal and GitHub unless stated otherwise. No Terraform used.
+---
+
+## Phase 0: Fork original Repo
+
+Forked the original PayFlow repo on Github. `https://github.com/cypress-io/cypress-realworld-app`
 
 ---
 
@@ -34,6 +39,8 @@ One resource group holds everything. No separate resource groups needed.
 - **SESSION-SECRET-PRODUCTION**
 - **PAGINATION-PAGE-SIZE**
 
+![Screenshot 2026-05-11 013126](Screenshot%202026-05-11%20013126.png)
+
 The session secret in `backend/app.ts` is hardcoded as the string `session secret` and must be replaced with a Key Vault reference.
 
 ![Session secret](Images/Session%20secret.png)
@@ -54,6 +61,8 @@ The session secret in `backend/app.ts` is hardcoded as the string `session secre
 - Continuous deployment: Disabled because GitHub Actions is configured manually in Phase 7
 - Basic authentication: Enabled. Required to download the Publish Profile later
 
+![Screenshot 2026-05-11 022634](Images/Screenshot%202026-05-11%20022634.png)
+
 **Step 2:** Configured the startup command under Settings
 
 ```
@@ -66,177 +75,132 @@ The README lists `start` as the script that starts the backend and frontend toge
 
 ![prestart](Images/prestart.png)
 
-**Step 6:** Added three environment variables under Settings → Environment variables → App settings:
+**Step 3:** Added three environment variables
 
-- `NODE_ENV` = `production` — without this the backend exposes the `/testData` route which allows anyone to wipe the database
-- `WEBSITE_WEBDEPLOY_USE_SCM` = `true` — required for Linux web apps before downloading the Publish Profile
-- `FRONTEND_URL` = `https://payflow-production.azurewebsites.net` — the CORS fix reads this to set the allowed browser origin
+- `NODE_ENV` = `production`. Without this the backend exposes the `/testData` route which allows anyone to wipe the database
+- `WEBSITE_WEBDEPLOY_USE_SCM` = `true`. Required for Linux web apps before downloading the Publish Profile
+- `FRONTEND_URL` = `payflow-production-bjescndqgahyhuc5.canadacentral-01.azurewebsites.net`. For the CORS fix to set the allowed browser origin
 
-> **Note:** `PORT` was not set as an app setting. Azure App Service on Linux automatically injects `PORT` into `process.env` at runtime — adding it manually conflicts with the platform. `VITE_BACKEND_PORT` was also not set here — it is a Vite build-time variable baked into the React bundle at compile time and must be set in GitHub Actions during the `yarn build` step, not in the Azure portal.
+![Screenshot 2026-05-11 033646](Images/Screenshot%202026-05-11%20033646.png)
 
-Clicked Apply, then Apply.
-
-**Step 7:** Enabled System Assigned Managed Identity under Settings → Identity → System assigned → toggled Status to On → clicked Yes. Copied and saved the Object (principal) ID.
-
-![Managed Identity Production](Images/managed-identity-production.png)
+**Step 7:** Enabled System Assigned Managed Identity on the Production Web App. Then copied and saved the production slot's Object (principal) ID.
 
 ---
 
 ## Phase 4: Add the Staging Deployment Slot
 
-**Step 8:** Inside `payflow-production`, went to Deployment → Deployment slots → + Add. Filled in:
+**Step 1:** Created the Staging Deployment Slot
+
 - Name: `staging`
-- Clone settings from: `payflow-production` — copies the General settings including startup command and Node runtime
+- Clone settings from: `payflow-production`
 
-Clicked Add and waited for the slot to be created. The staging slot URL is `payflow-production-staging.azurewebsites.net`.
+![Screenshot 2026-05-11 033732.png](Images/Screenshot%202026-05-11%20033732.png)
 
-![Staging Slot](Images/staging-slot.png)
+**Step 2:** Configured the staging slot's own environment variables.
 
-**Step 9:** Configured the staging slot's own environment variables. The slot cloned the general settings but not the app settings. Inside the staging slot management page, went to Settings → Environment variables → App settings and added:
-
-- `NODE_ENV` = `production` — keeps `/testData` route disabled in staging too
+- `NODE_ENV` = `production`
 - `WEBSITE_WEBDEPLOY_USE_SCM` = `true`
-- `FRONTEND_URL` = `https://payflow-production-staging.azurewebsites.net` — staging has its own URL, CORS must allow this specific URL
+- `FRONTEND_URL` = `https://payflow-production-staging.azurewebsites.net`
 
-Clicked Apply, then Apply.
+![Screenshot 2026-05-11 033749](Images/Screenshot%202026-05-11%20033749.png)
 
-**Step 10:** Enabled System Assigned Managed Identity on the staging slot under Settings → Identity → System assigned → toggled On → clicked Yes. Copied and saved the staging slot's Object (principal) ID — it is different from production's. Each deployment slot has its own Managed Identity.
-
-![Managed Identity Staging](Images/managed-identity-staging.png)
+**Step 3:** Enabled System Assigned Managed Identity on the staging slot. Then copied and saved the staging slot's Object (principal) ID.
 
 ---
 
 ## Phase 5: Grant Key Vault Access to Both Identities
 
-Both the production Web App and the staging slot need their own Key Vault Secrets User role assignment. They have different Managed Identity IDs so each needs its own role assignment separately.
+**Step 1:** Granted the production Web App access to Key Vault. 
 
-**Step 11:** Granted the production Web App access to Key Vault. Navigated to `kv-payflow` → Access control (IAM) → + Add → Add role assignment:
 - Role: Key Vault Secrets User
-- Members: Managed identity → App Service → `payflow-production` (the main slot, not staging)
+- Members: `payflow-production` (The production slot)
 
-Clicked Select, then Review + assign twice.
+**Step 2:** Granted the staging slot access to Key Vault.
 
-**Step 12:** Granted the staging slot access to Key Vault. Same path, same role:
-- Members: Managed identity → App Service → `payflow-production/staging`
+- Same role
+- Members: `payflow-production/staging`
 
-The staging slot appears as `payflow-production/staging` in the Managed Identity picker.
+![Screenshot 2026-05-11 170522](Images/Screenshot%202026-05-11%20170522.png)
 
-![Key Vault Role Assignments](Images/key-vault-roles.png)
+**Step 3:** Connected the Key Vault secrets to the production Web App. Status must show resolved
 
-**Step 13:** Connected the Key Vault secrets to the production Web App. Navigated back to `payflow-production` main Web App → Settings → Environment variables → App settings and added:
+- `SESSION_SECRET`
+- `PAGINATION_PAGE_SIZE`
 
-- `SESSION_SECRET` = `@Microsoft.KeyVault(VaultName=kv-payflow;SecretName=SESSION-SECRET-PRODUCTION)`
+![Screenshot 2026-05-11 170555](Images/Screenshot%202026-05-11%20170555.png)
+
+**Step 4:** Connected the Key Vault secrets to the staging slot.
+
+- `SESSION_SECRET` = `@Microsoft.KeyVault(VaultName=kv-payflow;SecretName=SESSION-SECRET-STAGING)`. Checked **Deployment slot setting** checkbox. So that each environment keeps its own session secret permanently
 - `PAGINATION_PAGE_SIZE` = `@Microsoft.KeyVault(VaultName=kv-payflow;SecretName=PAGINATION-PAGE-SIZE)`
 
-Clicked Apply, then Apply. Both settings showed Status: Resolved confirming the production Web App reads secrets from Key Vault via its Managed Identity.
-
-**Step 14:** Connected the Key Vault secrets to the staging slot. Navigated to the staging slot → Settings → Environment variables → App settings and added:
-
-- `SESSION_SECRET` = `@Microsoft.KeyVault(VaultName=kv-payflow;SecretName=SESSION-SECRET-STAGING)` — also checked the **Deployment slot setting** checkbox. This marks `SESSION_SECRET` as slot-specific so it does not get swapped to production during a swap. Each environment keeps its own session secret permanently
-- `PAGINATION_PAGE_SIZE` = `@Microsoft.KeyVault(VaultName=kv-payflow;SecretName=PAGINATION-PAGE-SIZE)`
-
-Clicked Apply, then Apply. Both Key Vault references showed Status: Resolved.
-
-![Key Vault Resolved](Images/key-vault-resolved.png)
+![Screenshot 2026-05-11 170910](Images/Screenshot%202026-05-11%20170910.png)
 
 ---
 
 ## Phase 6: Code Fixes in the Fork
 
-Three issues in the source code prevent it from working in production. These changes were made in the fork only — never in the original cypress-io repository. The README confirms the app runs on port 3000 (frontend) and 3001 (API backend) by default — none of the port configuration changes.
+I noticed three issues in the source code preventing it from working in production. These changes were made in the fork only.
 
-**Step 15:** Fixed the CORS configuration in `backend/app.ts`. The `corsOption` block had the origin hardcoded to `localhost` — any request from the Azure URL was blocked. Changed it to:
+**Step 1:** Fixed the CORS configuration in `backend/app.ts`. The `corsOption` block had the origin hardcoded to `localhost`. So Any request from the Azure URL was blocked. The change is the in the red box above in the screenshot.
 
-```typescript
-const corsOption = {
-  origin: process.env.FRONTEND_URL || `http://localhost:${frontendPort}`,
-  credentials: true,
-};
-```
+![Screenshot 2026-05-11 172541](Images/Screenshot%202026-05-11%20172541.png)
 
-`FRONTEND_URL` is set differently per slot — production reads its URL, staging reads its URL. The fallback keeps local development working on port 3000 exactly as the README specifies.
+`FRONTEND_URL` is set differently per slot. Production reads its URL, staging reads its URL.
 
-**Step 16:** Fixed the session secret in `backend/app.ts`. Line 56 had `secret: "session secret"` hardcoded — this must come from Key Vault. Changed it to:
+**Step 2:** Fixed the session secret in `backend/app.ts` which was hardcoded as `secret: "session secret"` to come from Key Vault. Change is in the red box below;
 
-```typescript
-secret: process.env.SESSION_SECRET || "session secret"
-```
+![Screenshot 2026-05-11 172541.png](Images/Screenshot%202026-05-11%20172541.png)
 
-On Azure, `SESSION_SECRET` is resolved from Key Vault via the slot-specific setting. Locally it falls back to the hardcoded value which is fine for development as the README indicates.
+On Azure, `SESSION_SECRET` is resolved from Key Vault via the slot-specific setting.
 
-**Step 17:** Fixed static file serving in `backend/app.ts`. Line 122 only served from `public/` but Vite's `yarn build` output goes to `build/`. Added the build folder immediately after the existing static line, then added the SPA fallback before the `getBackendPort().then` block:
+**Step 3:** Fixed static file serving in `backend/app.ts`.
 
-```typescript
-app.use(express.static(join(__dirname, '../public')));
-app.use(express.static(join(__dirname, '../build')));
+- Added the build folder immediately after the existing static line 120.
+- Added the SPA fallback(a bridge between Express and React Router) before the `getBackendPort().then` block:
 
-const apiPaths = ['/graphql','/users','/contacts','/bankAccounts',
-  '/transactions','/likes','/comments','/notifications',
-  '/bankTransfers','/testData'];
-
-app.get('*', (req, res) => {
-  const isApiRoute = apiPaths.some(p => req.path.startsWith(p));
-  if (!isApiRoute) {
-    res.sendFile(join(__dirname, '../build/index.html'));
-  }
-});
-```
-
-**Step 18:** Committed and pushed all three fixes:
-
-```bash
-git add backend/app.ts
-git commit -m "fix: CORS, session secret, and static file serving for Azure production"
-git push origin develop
-```
+![SPA](Images/SPA.png)
 
 ---
 
 ## Phase 7: GitHub Environments and Actions Pipeline
 
-**Step 19:** Downloaded two Publish Profiles — one for each slot. They are separate credentials:
-- Went to the staging slot Overview page → clicked Download publish profile → saved as `staging-slot-publish-profile.xml`
-- Went to the main `payflow-production` Overview page → clicked Download publish profile → saved as `production-slot-publish-profile.xml`
+**Step 1:** Downloaded two Publish Profiles, one for each slot.
 
-These files contain credentials and were not committed to the repository. Their contents were pasted directly into GitHub Secrets.
+![Screenshot 2026-05-11 175735](Images/Screenshot%202026-05-11%20175735.png)
 
-**Step 20:** Created two GitHub Environments under the repository Settings → Environments:
+**Step 2:** Created two GitHub Environments
 
-- **staging** — no protection rules, deploys automatically. Added secret `AZURE_WEBAPP_PUBLISH_PROFILE` with the full contents of `staging-slot-publish-profile.xml`
-- **production** — checked Required reviewers under Deployment protection rules and added my GitHub username. This creates the manual approval gate. Added secret `AZURE_WEBAPP_PUBLISH_PROFILE` with the full contents of `production-slot-publish-profile.xml`
+- **staging**z: no protection rules, deploys automatically. Added secret `AZURE_WEBAPP_PUBLISH_PROFILE` with the full contents of `staging-slot-publish-profile.xml`
+- **production**: Added my GitHub username as a required reviewer. This creates the manual approval gate. Added secret `AZURE_WEBAPP_PUBLISH_PROFILE` with the full contents of `production-slot-publish-profile.xml`
 
-![GitHub Environments](Images/github-environments.png)
+![Screenshot 2026-05-11 180829](Images/Screenshot%202026-05-11%20180829.png)
 
-**Step 21:** Created `.github/workflows/deploy.yml` with the three-job pipeline and pushed it to `develop`. Also deleted all original Cypress workflow files from `.github/workflows/` — they were test-only pipelines that caused noise and failures on every push.
+**Step 3:** Created a deployment file with the three-job pipeline. Check `.github/workflows/deploy.yml`
+Also I deleted all original Cypress workflow files from `.github/workflows/`. They were test-only pipelines that caused noise and failures on every push.
+
+![Screenshot 2026-05-11 231016](Images/Screenshot%202026-05-11%20231016.png)
+![Screenshot 2026-05-11 234428](Images/Screenshot%202026-05-11%20234428.png)
+![Screenshot 2026-05-12 004733](Images/Screenshot%202026-05-12%20004733.png)
 
 The three jobs:
 - **Job 1 (ci):** Installs dependencies, runs type check, lint, unit tests, builds the frontend with `VITE_BACKEND_PORT=3001` baked in at build time, and uploads the full workspace as the `payflow-build` artifact
 - **Job 2 (deploy-staging):** Downloads the artifact and deploys it to the staging slot automatically after CI passes
 - **Job 3 (swap-to-production):** Downloads the same artifact, pauses for manual approval, then deploys to production
 
-The same artifact from Job 1 is used by both Job 2 and Job 3 — staging and production always run the exact same compiled binary.
-
-![GitHub Actions Pipeline](Images/pipeline.png)
+The same artifact from Job 1 is used by both Job 2 and Job 3.
 
 ---
 
 ## Phase 8: Verify Everything Works
 
-**Step 22:** Pushed to `develop` and went to the GitHub Actions tab. Watched the CI Quality Checks job pass through all steps — install, copy AWS exports, type check, lint, unit tests, build frontend. Deploy to Staging Slot ran automatically after CI. Swap to Production showed the orange Review deployments banner.
+**Step 1:** Pushed to `develop` and went to the GitHub Actions tab. Watched the CI Quality Checks job pass through all steps.Swap to Production showed the orange Review deployments banner.
 
-**Step 23:** Before approving, opened the staging URL `https://payflow-production-staging.azurewebsites.net` and confirmed the PayFlow login page loaded. Logged in with `Heath93` / `s3cret` and confirmed the dashboard loaded with transactions.
+![Screenshot 2026-05-13 153241](Images/Screenshot%202026-05-13%20153241.png)
 
-![Staging Working](Images/staging-working.png)
+**Step 2:** Before approving, opened the staging URL `https://payflow-production-staging.azurewebsites.net` and confirmed the PayFlow login page never loaded. Then I encountered my first error
 
-**Step 24:** Clicked Review deployments on the Swap to Production job, checked the box next to production, and clicked Approve and deploy. Watched the swap complete. Opened `https://payflow-production.azurewebsites.net` and confirmed both slots showed the PayFlow dashboard with transactions.
-
-![Production Working](Images/production-working.png)
-
-**Step 25:** Verified the full secrets chain on both slots:
-- Went to `kv-payflow` → Secrets — clicked `SESSION-SECRET-PRODUCTION` and confirmed the value was hidden
-- Went to `payflow-production` → Environment variables — `SESSION_SECRET` showed `@Microsoft.KeyVault(...)` with Status: Resolved
-- Went to staging slot → Environment variables — `SESSION_SECRET` showed `@Microsoft.KeyVault(...)` referencing `SESSION-SECRET-STAGING` with Status: Resolved
-- Checked GitHub Actions logs across completed runs — no secret values appeared anywhere in the output
+![Screenshot 2026-05-13 154731](Images/Screenshot%202026-05-13%20154731.png)
 
 ---
 
@@ -244,60 +208,109 @@ The same artifact from Job 1 is used by both Job 2 and Job 3 — staging and pro
 
 ### Problems
 
-- **`ncp: not found` on first deployment:** The `prestart` script called `ncp` to copy mock AWS export files. Azure's Oryx build engine (introduced July 2025) compresses `node_modules` into a `tar.gz` at deployment. The startup script ran before the extraction completed — `ncp` was inside the zip and inaccessible.
+- **1. `ncp: not found` on first deployment:** The `prestart` script called `ncp` to copy mock AWS export files. Azure's Oryx build engine compresses `node_modules` into a `tar.gz` at deployment and extracts it at container startup. By the time the startup script ran, `ncp` was not accessible. Either it was excluded from the archive or not yet extracted.
 
-**Solution:** Created `scripts/fix-prestart.js` — a script that runs in GitHub Actions Job 1 before the artifact is uploaded, replacing `ncp` with Node.js's built-in `fs.copyFileSync` which requires nothing from `node_modules`. Added the file to `.prettierignore` to prevent Prettier from breaking the string escaping during CI.
+![Screenshot 2026-05-13 160244](Images/Screenshot%202026-05-13%20160244.png)
 
----
+**Solution:** Created `scripts/fix-prestart.js`, a script that runs in GitHub Actions Job 1 before the artifact is uploaded, replacing `ncp` with Node.js's built-in `fs.copyFileSync` which requires nothing from `node_modules`. 
+Added the file to `.prettierignore` as well to prevent Prettierfrom breaking the string escaping during CI.
 
-- **`ts-node: No such file or directory` — broken symlink:** After fixing `ncp`, the start script called `ts-node` through `node_modules/.bin/ts-node`. That `.bin` entry is a shell script symlink. When GitHub Actions zips the artifact and Kudu extracts it, symlinks break. Updated `fix-prestart.js` to also rewrite the `start` script, calling `ts-node`'s real JavaScript entrypoint directly: `node node_modules/ts-node/dist/bin.js -P tsconfig.tsnode.json backend/app.ts`
+![Screenshot 2026-05-17 015415](Images/Screenshot%202026-05-17%20015415.png)
 
-**Solution:** Bypassed the broken symlink entirely by calling `node_modules/ts-node/dist/bin.js` directly — the real file, not the pointer.
+![Screenshot 2026-05-17 021218](Images/Screenshot%202026-05-17%20021218.png)
 
----
-
-- **`Still waiting...` infinite loop deadlock:** An early `startup.sh` had a `while` loop checking every 2 seconds until `ts-node` appeared in `node_modules/.bin`. Since the symlink was always broken, the loop ran forever. The container was alive enough to log but not healthy enough to accept new deployments or SSH connections.
-
-**Solution:** Cleared the startup command directly in the Azure Portal to break the deadlock. The startup command field is the manual override when automation traps itself.
+![Screenshot 2026-05-17 031301](Images/Screenshot%202026-05-17%20031301.png)
 
 ---
 
-- **`cross-env: not found` and `nyc: not found`:** After fixing `ts-node`, the start script still called `cross-env` and `nyc` — both tools in `node_modules/.bin` with the same broken symlink problem.
+- **2. `cross-env: not found`:** After fixing `ncp`, the `prestart` script was replaced successfully but the `start` script still called `cross-env` to set `NODE_ENV=development` before starting the app. `cross-env` is a third-party package that lives in `node_modules/.bin`. The same symlink problem as `ncp`. Azure could not find it at startup.
 
-**Solution:** Updated `fix-prestart.js` to strip both from the start script entirely.
+![Screenshot 2026-05-17 123933](Images/Screenshot%202026-05-17%20123933.png)
 
----
+**Solution:** Updated `fix-prestart.js` to rewrite the `start` script entirely, replacing the original command with a direct `ts-node` call to the backend, bypassing `cross-env`, `concurrently`, and the Vite development server entirely.
 
-- **`Cannot find module 'tsconfig-paths/register'`:** The `-r tsconfig-paths/register` flag told ts-node to preload `tsconfig-paths` before running. Same extraction issue.
-
-**Solution:** Removed the flag entirely — the backend code does not use TypeScript path aliases so removing it had no functional impact.
+![Screenshot 2026-05-17 133321](Images/Screenshot%202026-05-17%20133321.png)
 
 ---
 
-- **`PORT undefined` — backend starting on a random port:** The backend's `getBackendPort()` function reads `VITE_BACKEND_PORT`, not `process.env.PORT`. `VITE_BACKEND_PORT` is a Vite build-time variable that does not exist as a runtime environment variable in the backend process. The function returned `undefined` and the app fell back to a random port. Azure's health check got no response.
+- **3. `ts-node: not found`:** After fixing `cross-env`, the start script called `ts-node` through `node_modules/.bin/ts-node`. That `.bin` entry is a shell script symlink. When GitHub Actions zips the artifact and Kudu extracts it, symlinks break.
 
-**Solution:** Added `PORT=8080` and `VITE_BACKEND_PORT=8080` as App Service environment variables on both slots during troubleshooting.
+![Screenshot 2026-05-17 180238](Images/Screenshot%202026-05-17%20180238.png)
 
----
+**Solution:** Updated `fix-prestart.js` to call `ts-node` through its  real JavaScript file directly, bypassing the broken `.bin` symlink entirely. Then added `PORT=8080` as an App Service environment variables so the backend knew which port to listen on and `VITE_BACKEND_PORT=8080` as well so getBackendPort() reads to start Express. Azure's health check got a response, the app was marked healthy, and the backend loaded.
 
-- **`localhost:3001` hardcoded in 36 places across 9 machine files:** The React frontend compiled with `VITE_BACKEND_PORT=3001` baked permanently into the JavaScript bundle. Every API call went to `http://localhost:3001`. On Azure there is no localhost.
+![Screenshot 2026-05-19 203235](Images/Screenshot%202026-05-19%20203235.png)
 
-**Solution:** Added `apiBaseUrl` to `src/utils/portUtils.ts` returning `""` in production and `http://localhost:${backendPort}` in development. Ran `bash fix-backend-urls.sh` to replace all 36 instances automatically.
+![Screenshot 2026-05-19 205357](Images/Screenshot%202026-05-19%20205357.png)
 
----
-
-- **`import.meta.env.PROD` crashing the backend:** The URL fix used `import.meta.env.PROD` to detect production in `portUtils.ts`. Vite understands `import.meta` but Node.js does not. The backend imports `portUtils.ts` and crashed immediately.
-
-**Solution:** Replaced with `process.env.NODE_ENV === "production"` which both runtimes understand.
+![Screenshot 2026-05-19 205600](Images/Screenshot%202026-05-19%20205600.png)
 
 ---
 
-- **Root route blocking React from loading:** The Express backend had `app.get("/", res.send("Cypress Realworld App - backend"))` defined above the static file middleware — intercepting every browser request before React could load.
+- **4. Root route blocking React from loading:** The Express backend had `app.get("/", res.send("Cypress Realworld App - backend"))` under backend/app.ts lines 98, 99, and 100 defined above the static file middleware, intercepting every browser request before React could load.
+
+![Screenshot 2026-05-20 003200](Images/Screenshot%202026-05-20%20003200.png)
 
 **Solution:** Deleted those three lines entirely. Requests to `/` now fall through to `express.static("../build")` which serves `index.html`.
 
+![Screenshot 2026-05-20 004322](Images/Screenshot%202026-05-20%20004322.png)
+
+![Screenshot 2026-05-20 004656](Images/Screenshot%202026-05-20%20004656.png)
+
 ---
 
-- **SPA fallback registered after the server started listening:** The `apiPaths` block and `app.get("*", ...)` wildcard were placed after the `getBackendPort().then(app.listen)` block. Routes must be registered before the server starts listening or they never fire.
+- **5. `localhost:3001` hardcoded in 36 places across 9 machine files:** The React frontend compiled with `VITE_BACKEND_PORT=3001` baked permanently into the JavaScript bundle. Every API call went to `http://localhost:3001` and on Azure there is no localhost.
 
-**Solution:** Moved the entire SPA fallback block to before `getBackendPort().then`.
+![Screenshot 2026-05-21 023122](Images/Screenshot%202026-05-21%20023122.png)
+
+**Solution:** Manually editing 36 instances across 9 files was too risky. One missed instance or a typo would cause a silent bug in production. I created a bash script using sed, a command line tool that finds and replaces text in files, which did all 36 replacements across 9 files automatically, and the script added `apiBaseUrl` to `src/utils/portUtils.ts` returning `""` in production and `http://localhost:${backendPort}` in development. 
+
+![Screenshot 2026-05-22 164738](Images/Screenshot%202026-05-22%20164738.png)
+
+---
+
+- **6. `import.meta.env.PROD` crashing the backend:** After running `bash fix-backend-urls.sh` and `yarn dev` the URL fix used `import.meta.env.PROD` to detect production in `portUtils.ts`. Vite understands `import.meta` but Node.js does not. The backend imports `portUtils.ts` and crashed immediately.
+
+![Screenshot 2026-05-22 164800](Images/Screenshot%202026-05-22%20164800.png)
+
+![Screenshot 2026-05-22 164810](Images/Screenshot%202026-05-22%20164810.png)
+
+**Solution:** I replaced it with `process.env.NODE_ENV === "production"` which both runtimes understand.
+
+![Screenshot 2026-05-22 164934](Images/Screenshot%202026-05-22%20164934.png)
+
+---
+
+- **7. Busy Ports:** After the previous fix, I encountered another minor error, where the server failed to start on a number of ports.
+
+![Screenshot 2026-05-22 165210](Images/Screenshot%202026-05-22%20165210.png)
+
+**Solution:** I checked all the ports that were rejected and what was running on them and shutdown all the services and then `yarn dev` succeeded.
+
+![Screenshot 2026-05-22 170730](Images/Screenshot%202026-05-22%20170730.png)
+
+![Screenshot 2026-05-22 171629](Images/Screenshot%202026-05-22%20171629.png)
+
+---
+
+**Step 3, Wrong time:** Clicked Review deployments on the Swap to Production job, checked the box next to production, and clicked Approve and deploy. Watched the swap complete.
+
+---
+
+- **8. 401 Unauthorized Error:** After inputting the right credentials, saw this error after using `ctrl + f12`
+
+![Screenshot 2026-05-25 013715](Images/Screenshot%202026-05-25%20013715.png)
+
+**Solution:** 
+
+![Screenshot 2026-05-25 014810](Images/Screenshot%202026-05-25%20014810.png)
+
+![Screenshot 2026-05-25 014810](Images/Screenshot%202026-05-25%20014810.png)
+
+---
+
+**Step 4:** Verified the full secrets chain on both slots:
+- Clicked `SESSION-SECRET-PRODUCTION` and confirmed the value was hidden
+- Checked `SESSION_SECRET` and it showed `@Microsoft.KeyVault(...)` with Status: Resolved
+- Went to staging slot and checked `SESSION_SECRET` which showed `@Microsoft.KeyVault(...)` referencing `SESSION-SECRET-STAGING` with Status: Resolved
+- Checked GitHub Actions logs across completed runs and no secret values appeared anywhere in the output
