@@ -39,7 +39,7 @@ One resource group holds everything. No separate resource groups needed.
 - **SESSION-SECRET-PRODUCTION**
 - **PAGINATION-PAGE-SIZE**
 
-![Screenshot 2026-05-11 013126](Screenshot%202026-05-11%20013126.png)
+![Screenshot 2026-05-11 013126](Images/Screenshot%202026-05-11%20013126.png)
 
 The session secret in `backend/app.ts` is hardcoded as the string `session secret` and must be replaced with a Key Vault reference.
 
