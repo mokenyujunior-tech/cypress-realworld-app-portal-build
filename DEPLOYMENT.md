@@ -206,7 +206,7 @@ The same artifact from Job 1 is used by both Job 2 and Job 3.
 
 ## Problems Faced and Solutions
 
-### Problems
+### Problems and Solutions
 
 - **1. `ncp: not found` on first deployment:** The `prestart` script called `ncp` to copy mock AWS export files. Azure's Oryx build engine compresses `node_modules` into a `tar.gz` at deployment and extracts it at container startup. By the time the startup script ran, `ncp` was not accessible. Either it was excluded from the archive or not yet extracted.
 
