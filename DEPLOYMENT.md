@@ -301,11 +301,11 @@ Added the file to `.prettierignore` as well to prevent Prettierfrom breaking the
 
 ![Screenshot 2026-05-25 013715](Images/Screenshot%202026-05-25%20013715.png)
 
-**Solution:** 
+**Solution:** The error resolved after the correct code from my final pipeline, which included the `apiBaseUrl` fix replacing all 36 hardcoded `localhost` URLs across 9 machine files, and the `process.env.NODE_ENV` fix replacing the broken `import.meta.env.PROD` in `portUtils.ts`, had fully deployed and stabilized on Azure. The backend initialized correctly and login succeeded.
 
 ![Screenshot 2026-05-25 014810](Images/Screenshot%202026-05-25%20014810.png)
 
-![Screenshot 2026-05-25 014810](Images/Screenshot%202026-05-25%20014810.png)
+![Screenshot 2026-05-25 015051](Images/Screenshot%202026-05-25%20015051.png)
 
 ---
 
