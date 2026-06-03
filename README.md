@@ -6,9 +6,7 @@
 
 ## 1. Architecture
 
-```
-![Architecture](Images/Architecture.jpeg)
----
+![Architecture](Images/Architecture.png)
 
 ## 2. Tools Used
 
