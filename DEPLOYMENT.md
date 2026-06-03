@@ -1,7 +1,6 @@
 # Deployment Steps
 
-All steps below were performed through the Azure Portal and GitHub unless stated otherwise. No Terraform used.
----
+All steps below were performed through the Azure Portal, AzureCLI and GitHub unless stated otherwise. No Terraform used.
 
 ## Phase 0: Fork original Repo
 
