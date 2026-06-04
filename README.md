@@ -1,5 +1,10 @@
 # A Full-Stack App Deployment on Azure - PayFlow
 
+[![CI](https://github.com/mokenyujunior-tech/cypress-realworld-app-portal-build/actions/workflows/deploy.yml/badge.svg?branch=develop)](https://github.com/mokenyujunior-tech/cypress-realworld-app-portal-build/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-22.x-brightgreen)](https://nodejs.org)
+[![Azure](https://img.shields.io/badge/hosted%20on-Azure%20App%20Service-blue?logo=microsoft-azure)](https://azure.microsoft.com)
+
 *A production-grade Node.js + React application deployed to Azure with a three-stage automated pipeline, secrets management, and zero-downtime slot swaps.*
 
 ---
@@ -70,96 +75,7 @@ Before starting you need:
 
 ---
 
-## 5. Problems Faced and Solutions
-
-### Problems and Solutions
-
-- **1. `ncp: not found` on first deployment:** The `prestart` script called `ncp` to copy mock AWS export files. Azure's Oryx build engine compresses `node_modules` into a `tar.gz` at deployment and extracts it at container startup. By the time the startup script ran, `ncp` was not accessible. Either it was excluded from the archive or not yet extracted.
-
-![Screenshot 2026-05-13 160244](Images/Screenshot%202026-05-13%20160244.png)
-
-**Solution:** Created `scripts/fix-prestart.js`, a script that runs in GitHub Actions Job 1 before the artifact is uploaded, replacing `ncp` with Node.js's built-in `fs.copyFileSync` which requires nothing from `node_modules`. 
-Added the file to `.prettierignore` as well to prevent Prettierfrom breaking the string escaping during CI.
-
-![Screenshot 2026-05-17 015415](Images/Screenshot%202026-05-17%20015415.png)
-
-![Screenshot 2026-05-17 021218](Images/Screenshot%202026-05-17%20021218.png)
-
-![Screenshot 2026-05-17 031301](Images/Screenshot%202026-05-17%20031301.png)
-
----
-
-- **2. `cross-env: not found`:** After fixing `ncp`, the `prestart` script was replaced successfully but the `start` script still called `cross-env` to set `NODE_ENV=development` before starting the app. `cross-env` is a third-party package that lives in `node_modules/.bin`. The same symlink problem as `ncp`. Azure could not find it at startup.
-
-![Screenshot 2026-05-17 123933](Images/Screenshot%202026-05-17%20123933.png)
-
-**Solution:** Updated `fix-prestart.js` to rewrite the `start` script entirely, replacing the original command with a direct `ts-node` call to the backend, bypassing `cross-env`, `concurrently`, and the Vite development server entirely.
-
-![Screenshot 2026-05-17 133321](Images/Screenshot%202026-05-17%20133321.png)
-
----
-
-- **3. `ts-node: not found`:** After fixing `cross-env`, the start script called `ts-node` through `node_modules/.bin/ts-node`. That `.bin` entry is a shell script symlink. When GitHub Actions zips the artifact and Kudu extracts it, symlinks break.
-
-![Screenshot 2026-05-17 180238](Images/Screenshot%202026-05-17%20180238.png)
-
-**Solution:** Updated `fix-prestart.js` to call `ts-node` through its  real JavaScript file directly, bypassing the broken `.bin` symlink entirely. Then added `PORT=8080` as an App Service environment variables so the backend knew which port to listen on and `VITE_BACKEND_PORT=8080` as well so getBackendPort() reads to start Express. Azure's health check got a response, the app was marked healthy, and the backend loaded.
-
-![Screenshot 2026-05-19 203235](Images/Screenshot%202026-05-19%20203235.png)
-
-![Screenshot 2026-05-19 205357](Images/Screenshot%202026-05-19%20205357.png)
-
-![Screenshot 2026-05-19 205600](Images/Screenshot%202026-05-19%20205600.png)
-
----
-
-- **4. Root route blocking React from loading:** The Express backend had `app.get("/", res.send("Cypress Realworld App - backend"))` under backend/app.ts lines 98, 99, and 100 defined above the static file middleware, intercepting every browser request before React could load.
-
-![Screenshot 2026-05-20 003200](Images/Screenshot%202026-05-20%20003200.png)
-
-**Solution:** Deleted those three lines entirely. Requests to `/` now fall through to `express.static("../build")` which serves `index.html`.
-
-![Screenshot 2026-05-20 004322](Images/Screenshot%202026-05-20%20004322.png)
-
-![Screenshot 2026-05-20 004656](Images/Screenshot%202026-05-20%20004656.png)
-
----
-
-- **5. `localhost:3001` hardcoded in 36 places across 9 machine files:** The React frontend compiled with `VITE_BACKEND_PORT=3001` baked permanently into the JavaScript bundle. Every API call went to `http://localhost:3001` and on Azure there is no localhost.
-
-![Screenshot 2026-05-21 023122](Images/Screenshot%202026-05-21%20023122.png)
-
-**Solution:** Manually editing 36 instances across 9 files was too risky. One missed instance or a typo would cause a silent bug in production. I created a bash script using sed, a command line tool that finds and replaces text in files, which did all 36 replacements across 9 files automatically, and the script added `apiBaseUrl` to `src/utils/portUtils.ts` returning `""` in production and `http://localhost:${backendPort}` in development. 
-
-![Screenshot 2026-05-22 164738](Images/Screenshot%202026-05-22%20164738.png)
-
----
-
-- **6. `import.meta.env.PROD` crashing the backend:** After running `bash fix-backend-urls.sh` and `yarn dev` the URL fix used `import.meta.env.PROD` to detect production in `portUtils.ts`. Vite understands `import.meta` but Node.js does not. The backend imports `portUtils.ts` and crashed immediately.
-
-![Screenshot 2026-05-22 164800](Images/Screenshot%202026-05-22%20164800.png)
-
-![Screenshot 2026-05-22 164810](Images/Screenshot%202026-05-22%20164810.png)
-
-**Solution:** I replaced it with `process.env.NODE_ENV === "production"` which both runtimes understand.
-
-![Screenshot 2026-05-22 164934](Images/Screenshot%202026-05-22%20164934.png)
-
----
-
-- **7. Busy Ports:** After the previous fix, I encountered another minor error, where the server failed to start on a number of ports.
-
-![Screenshot 2026-05-22 165210](Images/Screenshot%202026-05-22%20165210.png)
-
-**Solution:** I checked all the ports that were rejected and what was running on them and shutdown all the services and then `yarn dev` succeeded.
-
-![Screenshot 2026-05-22 170730](Images/Screenshot%202026-05-22%20170730.png)
-
-![Screenshot 2026-05-22 171629](Images/Screenshot%202026-05-22%20171629.png)
-
----
-
-## 6. Lessons Learned and Future Improvements
+## 5. Lessons Learned and Future Improvements
 
 ### Lessons Learned
 
