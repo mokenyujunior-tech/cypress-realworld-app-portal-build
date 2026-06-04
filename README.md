@@ -1,3 +1,5 @@
+<div align="center">
+
 # A Full-Stack App Deployment on Azure - PayFlow
 
 [![CI](https://github.com/mokenyujunior-tech/cypress-realworld-app-portal-build/actions/workflows/deploy.yml/badge.svg?branch=develop)](https://github.com/mokenyujunior-tech/cypress-realworld-app-portal-build/actions)
@@ -6,6 +8,8 @@
 [![Azure](https://img.shields.io/badge/hosted%20on-Azure%20App%20Service-blue?logo=microsoft-azure)](https://azure.microsoft.com)
 
 *A production-grade Node.js + React application deployed to Azure with a three-stage automated pipeline, secrets management, and zero-downtime slot swaps.*
+
+</div>
 
 ---
 
@@ -97,3 +101,5 @@ Before starting you need:
 - **Replace the `fix-prestart.js` workaround.** The proper long-term fix is to containerize the app with Docker so the Node.js version, Yarn version, and `node_modules` are all locked inside the image and Oryx never gets involved
 
 ---
+
+© 2026 Mokenyu Kezongwe
