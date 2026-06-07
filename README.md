@@ -75,6 +75,7 @@ Before starting you need:
 
 ## Project Structure
 
+```
 README.md               # Project overview and architecture
 .github/
   workflows/
@@ -86,6 +87,7 @@ CODE_FIXES.md           # Code changes made for Azure production
 scripts/
   fix-prestart.js       # Azure startup fix. Rewrites package.json before deploy
 fix-backend-urls.sh     # Replaces 36 hardcoded localhost URLs across 9 files
+```
 
 ---
 
