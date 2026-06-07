@@ -75,6 +75,15 @@ Before starting you need:
 
 ## Project Structure
 
+[README](README.md)                     # Project overview and architecture
+[deploy](.github/workflows/deploy.yml)  # Three-job GitHub Actions CI/CD pipeline - The code
+[Architecture](Architecture.md)         # Full architecture diagram
+[Azure_Setup](Azure_Setup.md)           # Step by step Azure portal setup journal
+[CI_CD](CI_CD.md)                       # Pipeline flow and all startup problems
+[CODE_FIXES](CODE_FIXES.md)             # Code changes made for Azure production
+[fix-prestart](scripts/fix-prestart.js) # Azure startup fix. Rewrites package.json before deploy
+[fix-backend-urls](fix-backend-urls.sh) # Replaces 36 hardcoded localhost URLs across 9 files
+
 ---
 
 ## How to Contribute
