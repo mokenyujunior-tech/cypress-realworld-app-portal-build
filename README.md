@@ -96,4 +96,4 @@ For bug reports or feature requests, open an issue on GitHub with as much detail
 
 ---
 
-© 2026 Mokenyu Kezongwe
+© 2026 Mokenyu Kezong
